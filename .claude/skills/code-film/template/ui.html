@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  ui.html: the fake app, rendered once per frame into ui/f_####.png by render_ui.py.
+  RULES (break them and frames stop being reproducible):
+  - No CSS transitions/animations, no timers, no Date.now(), no Math.random().
+    Everything visible is a pure function of render(t).
+  - Only local fonts (no network in headless renders).
+  - Anything the character lands on is [data-btn="Name"] or [data-spot="name"];
+    every 3D slab is a [data-panel="id"]. Positions are MEASURED from these, never typed.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; transition: none !important; animation: none !important; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0e0e10;
+    font-family: "Inter", "DejaVu Sans", sans-serif; color: #c9c9cf; }
+  .app { position: absolute; inset: 0; display: grid;
+    grid-template-columns: 380px 1fr 380px; grid-template-rows: 44px 76px 1fr 340px; }
+  [data-panel] { background: #1f1f23; border: 1px solid #303037; position: relative; overflow: hidden; }
+  [data-panel="menubar"]  { grid-column: 1 / 4; grid-row: 1; display: flex; align-items: center; gap: 34px;
+    padding-left: 26px; font-size: 19px; color: #9d9da6; background: #18181b; }
+  [data-panel="toolbar"]  { grid-column: 1 / 4; grid-row: 2; display: flex; align-items: center; gap: 22px;
+    padding-left: 420px; background: #1b1b1f; }
+  [data-panel="project"]  { grid-column: 1; grid-row: 3; padding: 22px; }
+  [data-panel="comp"]     { grid-column: 2; grid-row: 3; background: #101012; }
+  [data-panel="effects"]  { grid-column: 3; grid-row: 3; padding: 22px; }
+  [data-panel="timeline"] { grid-column: 1 / 4; grid-row: 4; }
+  h4 { font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: #7c7c86; margin-bottom: 16px; font-weight: 600; }
+  .btn { width: 118px; height: 54px; border-radius: 10px; background: #2a2a30; border: 2px solid #3a3a42;
+    display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 19px; font-weight: 600; color: #d4d4da; position: relative; }
+  .btn i { font-style: normal; font-size: 22px; color: #8fb8ff; }
+  .btn.active { border-color: #3d8bff; }
+  .btn.down { background: #3d8bff; color: #fff; transform: translateY(3px); }
+  .btn.down i { color: #fff; }
+  .ripple { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 3px solid #6aa8ff; pointer-events: none; }
+  .row { display: flex; align-items: center; gap: 12px; height: 40px; font-size: 18px; border-radius: 6px; padding: 0 10px; }
+  .row.hl { background: #2b4a7a; color: #fff; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; }
+  #compCanvas { position: absolute; inset: 0; }
+  .tl-ruler { position: absolute; left: 380px; right: 0; top: 0; height: 40px; border-bottom: 1px solid #303037; }
+  .tl-ruler span { position: absolute; top: 10px; font-size: 15px; color: #6d6d76; }
+  .layer { position: absolute; left: 0; right: 0; height: 46px; border-bottom: 1px solid #28282e; }
+  .layer .name { position: absolute; left: 22px; top: 12px; font-size: 17px; width: 340px; }
+  .layer .bar { position: absolute; left: 400px; right: 40px; top: 11px; height: 24px; border-radius: 5px; opacity: .85; }
+  .kf { position: absolute; top: 15px; width: 16px; height: 16px; background: #ffd25a; transform: rotate(45deg); }
+  #playhead { position: absolute; top: 0; bottom: 0; width: 3px; background: #ff4d4d; }
+  #playhead::before { content: ""; position: absolute; top: 0; left: -9px; width: 21px; height: 18px; background: #ff4d4d; border-radius: 3px; }
+  [data-spot] { position: absolute; width: 10px; height: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div data-panel="menubar"><b style="color:#d9d9e0">Comp</b><span>File</span><span>Edit</span><span>Composition</span>
+    <span>Layer</span><span>Effect</span><span>Animation</span><span>View</span><span>Window</span><span>Help</span></div>
+  <div data-panel="toolbar">
+    <div class="btn" data-btn="Type"><i>T</i>Type</div>
+    <div class="btn" data-btn="Rect"><i>▭</i>Rect</div>
+    <div class="btn" data-btn="Pen"><i>✒</i>Pen</div>
+    <div class="btn" data-btn="Glow"><i>✦</i>Glow</div>
+    <div class="btn" data-btn="Play"><i>▶</i>Play</div>
+  </div>
+  <div data-panel="project"><h4>Project</h4>
+    <div class="row"><span class="sw" style="background:#4a8cff"></span>Main Comp</div>
+    <div class="row"><span class="sw" style="background:#e07040"></span>character.png</div>
+    <div class="row"><span class="sw" style="background:#56c58a"></span>title.txt</div>
+    <div class="row"><span class="sw" style="background:#b98cff"></span>sound.wav</div>
+    <div data-spot="start" style="left:230px; top:560px"></div>
+  </div>
+  <div data-panel="comp"><canvas id="compCanvas" width="1160" height="620"></canvas>
+    <div data-spot="land" style="left:150px; top:500px"></div>
+  </div>
+  <div data-panel="effects"><h4>Effects &amp; Presets</h4>
+    <div class="row" data-fx="Blur">Gaussian Blur</div>
+    <div class="row" data-fx="Glow">Glow</div>
+    <div class="row" data-fx="Shadow">Drop Shadow</div>
+    <div class="row" data-fx="Grain">Film Grain</div>
+  </div>
+  <div data-panel="timeline">
+    <div class="tl-ruler" id="ruler"></div>
+    <div id="layers"></div>
+    <div id="playhead"></div>
+  </div>
+</div>
+<script>
+const TL = window.TL;                         // injected by render_ui.py from timeline.py
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = u => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;   // easeInOutCubic
+const outBack = u => { const c = 1.7; return 1 + (c+1)*Math.pow(u-1,3) + c*Math.pow(u-1,2); };
+const pressT = n => { const p = TL.PRESSES.find(p => p[1] === n); return p ? p[0] : Infinity; };
+
+// --- static timeline panel ---------------------------------------------
+const TL_X0 = 400, TL_X1 = 1920 - 40;        // time area in px (inside timeline panel)
+const LAYERS = [["Title", "#e05a5a", "Type"], ["Rectangle", "#d9b44a", "Rect"],
+                ["Underline", "#56c58a", "Pen"], ["Glow", "#9b7bff", "Glow"], ["Character", "#c9a27a", null]];
+const ruler = document.getElementById("ruler");
+for (let s = 0; s <= Math.floor(TL.DURATION); s++) {
+  const sp = document.createElement("span"); sp.textContent = s + "s";
+  sp.style.left = (TL_X0 - 380 + (TL_X1 - TL_X0) * s / TL.DURATION) + "px"; ruler.appendChild(sp);
+}
+const layersEl = document.getElementById("layers");
+LAYERS.forEach(([n, c], i) => {
+  const d = document.createElement("div"); d.className = "layer"; d.style.top = (40 + i * 52) + "px";
+  d.innerHTML = `<div class="name">${n}</div><div class="bar" style="background:${c}"></div>`;
+  d.dataset.layer = n; layersEl.appendChild(d);
+});
+
+// --- comp: the title card, drawn on a canvas as a pure function of t ------
+const cv = document.getElementById("compCanvas"), cx = cv.getContext("2d");
+function drawComp(t) {
+  const W = cv.width, H = cv.height;
+  cx.clearRect(0, 0, W, H);
+  cx.fillStyle = "#0b0b0d"; cx.fillRect(0, 0, W, H);
+  // safe-area guides
+  cx.strokeStyle = "rgba(255,255,255,.06)"; cx.lineWidth = 2; cx.strokeRect(60, 50, W - 120, H - 100);
+  const play = clamp((t - TL.PLAY[0]) / (TL.PLAY[1] - TL.PLAY[0]));
+  const pop = play > 0 ? 1 + 0.08 * Math.sin(Math.PI * clamp(play * 2)) : 1;
+  cx.save(); cx.translate(W / 2, H / 2 - 20); cx.scale(pop, pop);
+  // Rect: card draws in from the centre
+  const r = ease(clamp((t - pressT("Rect")) / 0.5));
+  if (r > 0) {
+    const rw = 860 * r, rh = 250;
+    cx.fillStyle = "#1c1c22"; cx.strokeStyle = "#e07040"; cx.lineWidth = 4;
+    cx.beginPath(); cx.roundRect(-rw / 2, -rh / 2, rw, rh, 22); cx.fill(); cx.stroke();
+  }
+  // Glow: grows on the text
+  const g = ease(clamp((t - pressT("Glow")) / 0.6));
+  // Type: typewriter
+  const ty = clamp((t - pressT("Type")) / 0.8);
+  const n = Math.floor(ty * TL.TITLE.length + 1e-6);
+  if (ty > 0) {
+    cx.font = "800 84px Inter, 'DejaVu Sans', sans-serif"; cx.textAlign = "center"; cx.textBaseline = "middle";
+    cx.shadowColor = "rgba(255,140,80," + (0.95 * g) + ")"; cx.shadowBlur = 40 * g;
+    cx.fillStyle = g > 0 ? `rgb(255,${Math.round(255 - 60 * g)},${Math.round(255 - 120 * g)})` : "#f2f2f5";
+    cx.fillText(TL.TITLE.slice(0, n), 0, -18);
+    if (g > 0) cx.fillText(TL.TITLE.slice(0, n), 0, -18);   // second pass = stronger bloom
+    cx.shadowBlur = 0;
+    // caret while typing
+    if (ty < 1 && Math.floor(t * 4) % 2 === 0) {
+      const w = cx.measureText(TL.TITLE.slice(0, n)).width;
+      cx.fillStyle = "#3d8bff"; cx.fillRect(w / 2 + 6, -58, 5, 80);
+    }
+  }
+  // Pen: underline stroke draws left to right, subtitle fades in with it
+  const p = ease(clamp((t - pressT("Pen")) / 0.6));
+  if (p > 0) {
+    cx.strokeStyle = "#e07040"; cx.lineWidth = 6; cx.lineCap = "round";
+    cx.beginPath(); cx.moveTo(-300, 48); cx.lineTo(-300 + 600 * p, 48); cx.stroke();
+    cx.globalAlpha = p; cx.font = "600 30px Inter, 'DejaVu Sans', sans-serif"; cx.fillStyle = "#a8a8b2";
+    cx.textAlign = "center"; cx.fillText(TL.SUBTITLE, 0, 92); cx.globalAlpha = 1;
+  }
+  cx.restore();
+}
+
+// --- render(t): the only entry point --------------------------------------
+window.render = function (t) {
+  // buttons: down for 0.22 s after the landing, then stay "active", ripple expands
+  document.querySelectorAll("[data-btn]").forEach(el => {
+    const tp = pressT(el.dataset.btn), dt = t - tp;
+    el.classList.toggle("down", dt >= 0 && dt < 0.22);
+    el.classList.toggle("active", dt >= 0.22);
+    el.querySelectorAll(".ripple").forEach(r => r.remove());
+    if (dt >= 0 && dt < 0.6) {
+      const u = dt / 0.6, s = 60 + 160 * Math.sqrt(u);
+      const r = document.createElement("div"); r.className = "ripple";
+      Object.assign(r.style, { width: s + "px", height: s + "px", marginLeft: -s / 2 + "px", marginTop: -s / 2 + "px", opacity: 1 - u });
+      el.appendChild(r);
+    }
+  });
+  // effects panel highlights Glow when it is pressed
+  document.querySelector('[data-fx="Glow"]').classList.toggle("hl", t >= pressT("Glow"));
+  // keyframe diamonds appear on a layer when its button is pressed
+  document.querySelectorAll(".kf").forEach(k => k.remove());
+  LAYERS.forEach(([n, , btn]) => {
+    const tp = pressT(btn); if (!(t >= tp)) return;
+    const d = document.createElement("div"); d.className = "kf";
+    d.style.left = (TL_X0 + (TL_X1 - TL_X0) * tp / TL.DURATION - 8) + "px";
+    document.querySelector(`[data-layer="${n}"]`).appendChild(d);
+  });
+  // playhead: parked at 0 until Play, then rides to the end of the play window
+  const play = ease(clamp((t - TL.PLAY[0]) / (TL.PLAY[1] - TL.PLAY[0])));
+  const secs = play > 0 ? play * TL.DURATION : 0;
+  document.getElementById("playhead").style.left = (TL_X0 + (TL_X1 - TL_X0) * secs / TL.DURATION) + "px";
+  drawComp(t);
+};
+
+// --- layout(): measured rects for the 3D side -----------------------------
+window.layout = function () {
+  const rect = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+  const out = { panels: {}, targets: {} };
+  document.querySelectorAll("[data-panel]").forEach(el => out.panels[el.dataset.panel] = rect(el));
+  document.querySelectorAll("[data-btn]").forEach(el => out.targets[el.dataset.btn] = rect(el));
+  document.querySelectorAll("[data-spot]").forEach(el => out.targets[el.dataset.spot] = rect(el));
+  return out;
+};
+</script>
+</body>
+</html>

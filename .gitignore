@@ -1,0 +1,12 @@
+# code-film generated outputs (re-creatable from sources)
+**/ui/
+**/frames/
+**/qa/
+**/layout.json
+**/sound.wav
+**/scene.blend
+**/scene.blend1
+**/film_*.mp4
+__pycache__/
+# test films made while validating the skill
+films/
