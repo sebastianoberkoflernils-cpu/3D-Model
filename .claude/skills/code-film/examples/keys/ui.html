@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  KEYS: a tablet piano app. Rendered per frame by render_ui.py. Pure function of render(t):
+  no transitions, timers, Date.now(), Math.random(). Landing targets: [data-btn] (one pad per
+  white key, in the lower part so the character never covers a black key) and [data-spot].
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; transition: none !important; animation: none !important; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0b0d12;
+    font-family: "Inter", "DejaVu Sans", sans-serif; color: #d9dbe3; }
+  [data-panel="screen"] { position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 70% at 50% 35%, #1a1f2e 0%, #0e1118 60%, #0a0c11 100%); }
+  .top { position: absolute; left: 0; right: 0; top: 0; height: 74px; display: flex; align-items: center;
+    padding: 0 48px; gap: 22px; border-bottom: 1px solid #1f2433; font-size: 22px; }
+  .top b { font-size: 26px; letter-spacing: .02em; color: #fff; }
+  .pill { padding: 6px 16px; border-radius: 999px; background: #1b2030; color: #9aa3bd; font-size: 18px; }
+  .rec { width: 14px; height: 14px; border-radius: 50%; background: #ff5a4f; }
+  #song { margin-left: auto; color: #8a92a8; font-size: 20px; }
+  #prog { position: absolute; left: 0; top: 73px; height: 3px; background: #ff8a4c; }
+  canvas { position: absolute; left: 0; top: 0; }
+  .kb { position: absolute; left: 60px; right: 60px; top: 640px; height: 400px; }
+  .w { position: absolute; top: 0; height: 400px; border-radius: 0 0 14px 14px;
+    background: linear-gradient(#f4f5f8, #dfe2ea); border: 2px solid #9aa0b0; }
+  .w span { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; font-size: 22px; font-weight: 600; color: #8a90a0; }
+  .bk { position: absolute; top: 0; height: 245px; border-radius: 0 0 9px 9px;
+    background: linear-gradient(#2a2e3a, #12141b); border: 2px solid #06070a; }
+  .pad { position: absolute; left: 50%; top: 315px; width: 10px; height: 10px; margin-left: -5px; }
+  [data-spot] { position: absolute; width: 10px; height: 10px; }
+</style>
+</head>
+<body>
+<div data-panel="screen">
+  <canvas id="viz" width="1920" height="640"></canvas>
+  <div class="top"><span class="rec"></span><b>Keys</b><span class="pill">120 BPM</span><span class="pill">C major</span>
+    <span id="song">Ode to Joy · L. v. Beethoven</span></div>
+  <div id="prog"></div>
+  <div class="kb" id="kb"></div>
+  <div data-spot="start" style="left:150px; top:560px"></div>
+  <div data-spot="title" style="left:955px; top:470px"></div>
+</div>
+<script>
+const TL = window.TL;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = u => u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3) / 2;
+
+// --- keyboard: 15 white keys C4..C6 + black keys -------------------------
+const WHITE = ["C4","D4","E4","F4","G4","A4","B4","C5","D5","E5","F5","G5","A5","B5","C6"];
+const KW = 1800 / WHITE.length;
+const kb = document.getElementById("kb");
+const whiteEls = {};
+WHITE.forEach((n, i) => {
+  const d = document.createElement("div"); d.className = "w";
+  d.style.left = (i * KW) + "px"; d.style.width = (KW - 4) + "px";
+  d.innerHTML = `<span>${n}</span><i class="pad" data-btn="${n}"></i>`;
+  kb.appendChild(d); whiteEls[n] = d;
+});
+WHITE.forEach((n, i) => {                       // black key after C, D, F, G, A
+  if (i === WHITE.length - 1 || !"CDFGA".includes(n[0])) return;
+  const d = document.createElement("div"); d.className = "bk";
+  d.style.left = ((i + 1) * KW - KW * 0.3 - 2) + "px"; d.style.width = (KW * 0.6) + "px";
+  kb.appendChild(d);
+});
+const keyX = n => 60 + (WHITE.indexOf(n) + 0.5) * KW;
+
+// --- visualizer: note bars rise from the key that was hit ------------------
+const cv = document.getElementById("viz"), cx = cv.getContext("2d");
+function drawViz(t) {
+  cx.clearRect(0, 0, 1920, 640);
+  // faint lane lines
+  cx.strokeStyle = "rgba(255,255,255,.035)"; cx.lineWidth = 2;
+  WHITE.forEach((n, i) => { cx.beginPath(); cx.moveTo(60 + i * KW, 90); cx.lineTo(60 + i * KW, 630); cx.stroke(); });
+  for (const [tp, n] of TL.PRESSES) {
+    const dt = t - tp; if (dt < 0 || dt > 3.2) continue;
+    const y = 630 - dt * 190, h = 40, w = KW - 26, x = keyX(n) - w / 2;
+    const a = clamp(1 - dt / 3.2) * clamp(dt * 12);
+    const g = cx.createLinearGradient(0, y - h, 0, y);
+    g.addColorStop(0, `rgba(255,170,110,${a})`); g.addColorStop(1, `rgba(255,110,60,${a})`);
+    cx.shadowColor = `rgba(255,120,60,${0.9 * a})`; cx.shadowBlur = 30;
+    cx.fillStyle = g; cx.beginPath(); cx.roundRect(x, y - h, w, h, 12); cx.fill();
+  }
+  cx.shadowBlur = 0;
+  // finale title
+  const u = ease(clamp((t - TL.FINALE + 0.1) / 0.9));
+  if (u > 0) {
+    cx.save(); cx.translate(960, 300); cx.scale(0.92 + 0.08 * u, 0.92 + 0.08 * u);
+    cx.globalAlpha = u; cx.textAlign = "center"; cx.textBaseline = "middle";
+    cx.font = "800 104px Inter, 'DejaVu Sans', sans-serif";
+    cx.shadowColor = "rgba(255,140,80,.9)"; cx.shadowBlur = 50 * u;
+    cx.fillStyle = "#fff4ea"; cx.fillText(TL.TITLE, 0, 0); cx.fillText(TL.TITLE, 0, 0);
+    cx.shadowBlur = 0; cx.font = "600 32px Inter, 'DejaVu Sans', sans-serif"; cx.fillStyle = "#9aa3bd";
+    cx.fillText(TL.SUBTITLE, 0, 92); cx.restore();
+  }
+}
+
+// --- render(t) -------------------------------------------------------------
+window.render = function (t) {
+  const [g0, gl] = TL.GLISS;
+  WHITE.forEach((n, i) => {
+    let lit = 0;
+    for (const [tp, k] of TL.PRESSES) if (k === n && t >= tp) lit = Math.max(lit, clamp(1 - (t - tp) / 0.45));
+    const tg = g0 + gl * i / WHITE.length;             // glissando wave, left to right
+    if (t >= tg) lit = Math.max(lit, clamp(1 - (t - tg) / 0.6));
+    const el = whiteEls[n];
+    el.style.background = lit > 0
+      ? `linear-gradient(rgba(255,${150 + 40 * (1 - lit)},${90 + 120 * (1 - lit)},1), #ffd2b0)`
+      : "linear-gradient(#f4f5f8, #dfe2ea)";
+    el.style.boxShadow = lit > 0 ? `0 0 ${60 * lit}px rgba(255,130,60,${lit})` : "none";
+    el.querySelector("span").style.color = lit > 0.3 ? "#7a2e0e" : "#8a90a0";
+  });
+  const last = TL.PRESSES[TL.PRESSES.length - 1][0];
+  document.getElementById("prog").style.width = (1920 * clamp(t / last)) + "px";
+  drawViz(t);
+};
+
+window.layout = function () {
+  const rect = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+  const out = { panels: {}, targets: {} };
+  document.querySelectorAll("[data-panel]").forEach(el => out.panels[el.dataset.panel] = rect(el));
+  document.querySelectorAll("[data-btn]").forEach(el => out.targets[el.dataset.btn] = rect(el));
+  document.querySelectorAll("[data-spot]").forEach(el => out.targets[el.dataset.spot] = rect(el));
+  return out;
+};
+</script>
+</body>
+</html>

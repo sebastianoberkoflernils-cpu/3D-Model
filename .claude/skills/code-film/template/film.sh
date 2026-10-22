@@ -17,6 +17,12 @@ if [[ -n "${BLENDER:-}" ]]; then "$BLENDER" -b --python-exit-code 1 -P render.py
 else $PY render.py "$Q" $FORCE; fi
 echo "== 4/5 QA"
 $PY check.py "$Q" || { echo "QA failed: fix before encoding (or look at qa/*.jpg)"; exit 1; }
+if [[ "$Q" == "preview" ]]; then
+  # preview = every Nth frame at low quality: for QA sheets only. Encoding it makes a choppy,
+  # noisy video that looks broken, so never hand it to anyone as "the film".
+  echo "preview OK -> look at qa/preview_sheet.jpg + qa/preview_landings.jpg; deliver only draft/final"
+  exit 0
+fi
 echo "== 5/5 encode"
 # yuv420p is required: PNG input otherwise becomes yuv444, which QuickTime/phones/browsers won't play
 ffmpeg -v error -y -framerate "$(python3 -c "print($FPS/$EVERY)")" -pattern_type glob -i "frames/$Q/f_*.png" \

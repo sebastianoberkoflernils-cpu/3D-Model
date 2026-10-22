@@ -122,7 +122,13 @@ if os.path.exists(wav):
     from scipy.signal import butter, sosfilt
     sr, x = wavfile.read(wav)
     x = x.mean(1) / 32768 if x.ndim > 1 else x / 32768
-    bp = sosfilt(butter(4, [1250, 1450], "bandpass", fs=sr, output="sos"), x)
+    # loudness: a silent or whisper-quiet track is a failure, not a style choice
+    rms_db = 20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-12)
+    if rms_db < -30:
+        fails.append(f"soundtrack is nearly silent (RMS {rms_db:.1f} dBFS, want about -20..-12)")
+    print(f"audio level: RMS {rms_db:.1f} dBFS")
+    band = list(getattr(T, "SYNC_BAND", (1250, 1450)))      # where the landing transient lives
+    bp = sosfilt(butter(4, band, "bandpass", fs=sr, output="sos"), x)
     hop = sr // 1000                                       # 1 ms envelope
     e = np.convolve(bp ** 2, np.ones(5 * hop) / (5 * hop), "same")[::hop]
     # judge each landing locally (a global threshold breaks when music shares the band):

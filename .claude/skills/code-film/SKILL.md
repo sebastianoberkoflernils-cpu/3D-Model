@@ -51,8 +51,12 @@ the finished card remains). Adapt it rather than starting blank.
    2–3 full-size frames around the riskiest moment (biggest hop, panel fall).
 7. **Final** (`film.sh final`, 1080p, 96 spp) only after the draft passes. Re-render a
    bad range with `render.py final --frames 120-150 --force`.
-8. Deliver `film_<q>.mp4` plus the contact sheet; say what was checked and what wasn't
-   (you cannot listen to audio — say the sync was verified numerically).
+8. Deliver **only `film_draft.mp4` or `film_final.mp4`** (every frame, 30 fps). Never send a
+   preview encode: every 6th frame at 480p/8 spp looks choppy and noisy, i.e. "buggy".
+   `film.sh preview` deliberately stops before encoding.
+9. Say what was verified and how: you cannot listen, so audio is verified numerically
+   (level, landing sync, pitch of melodic notes). Tell the user to unmute: in-app/phone
+   previews often autoplay muted, which reads as "there is no sound".
 
 ## Rules that make it work (each one was a real failure)
 
@@ -93,6 +97,12 @@ the finished card remains). Adapt it rather than starting blank.
   keys = sine + 2nd harmonic + tremolo; glock = inharmonic partials (1, 2.76, 5.4).
   SFX from the same HOPS: boing at takeoff, glass knock at landing, glock note per press (pentatonic up).
 - Fixed RNG seed. Write exactly `DURATION` seconds. Drums drop out at the power-down.
+- Make sound carry the story where possible (KEYS: every landing is a melody note), so the
+  soundtrack is obviously present and obviously in sync.
+- Put a short transient in a known band at each landing (`SYNC_BAND`, e.g. a 2-4 kHz tap) so
+  check.py can measure sync; check.py also fails a near-silent track (RMS < -30 dBFS).
+- Melodic films: verify every note's pitch from the wav (FFT peak within ±50 cents) before rendering.
+- Don't trust a log-scale spectrogram for "muddiness"; measure band energy shares instead.
 
 **ffmpeg**
 - Always `-pix_fmt yuv420p` (PNG input otherwise becomes yuv444 and won't play on phones/QuickTime/browsers),
@@ -102,6 +112,8 @@ the finished card remains). Adapt it rather than starting blank.
 - Frames are resumable (existing frames skipped). `.stamp` holds a hash of the sources; if
   timeline/scene/ui changed, old frames are deleted automatically, so stale frames cannot leak into
   the film. `--frames a-b` patches a range without wiping.
+- Never edit `film.sh` while it is running: bash reads scripts incrementally and can execute
+  half-written lines. Edit the template copy, not the running film's.
 - `check.py` thresholds: character inside 3–97 % of frame, ≤ 12 % of frame width per frame,
   camera accel ≤ 0.01 m/frame², landing knock within 1 frame of the landing, no black/blown frames.
 
@@ -114,6 +126,15 @@ the finished card remains). Adapt it rather than starting blank.
 | final | 1920×1080 | 96 | all 270 | several hours on CPU; ~15–20 min on a fast GPU |
 
 On CPU, deliver the draft and offer the final as a background job or GPU run.
+
+## Examples
+
+- `template/`: AE-style editor; character hops Type/Rect/Pen/Glow/Play, panels fall away.
+- `examples/keys/`: a different film on the same machinery: aluminium tablet on a walnut desk,
+  piano app UI, character plays *Ode to Joy* (each landing = a note, pitch-verified), glissando
+  finale synced to a light wave across the keys, crane to a top-down hero shot. Shows how to
+  replace the slabs with props (`tablet()`, `desk()`), write a new camera path, and score a melody.
+  Use: `new_film.sh films/x` then copy `examples/keys/*` over it.
 
 ## Adapting the template
 
