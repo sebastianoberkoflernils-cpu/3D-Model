@@ -13,6 +13,7 @@
 
 ## Structure
 - `.claude/skills/code-film/`: the skill (SKILL.md = method + rules), `template/` = working 9 s demo film
+- `.claude/skills/caveman|ultracave|megacave/`: terse-reply skill, copied from JuliusBrussee/caveman v4.0.1 (Apache-2.0); SKILL.md only, no plugin hooks
 - `films/`: per-film working dirs (gitignored)
 
 ## Decisions
