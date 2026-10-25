@@ -14,7 +14,7 @@
 ## Structure
 - `.claude/skills/code-film/`: the skill (SKILL.md = method + rules), `template/` = working 9 s demo film
 - `.claude/skills/caveman|ultracave|megacave/`: terse-reply skill, copied from JuliusBrussee/caveman v4.0.1 (Apache-2.0); SKILL.md only, no plugin hooks
-- `.claude/skills/graphify/`: codebase knowledge-graph skill, copied from safishamsi/graphify 0.9.95 (SKILL.md + references/); needs `pip install graphifyy` (skill self-installs). Uses Gemini only if GEMINI_API_KEY/GOOGLE_API_KEY set, else Claude subagents
+- `.claude/skills/graphify/`: codebase knowledge-graph skill, copied from safishamsi/graphify 0.9.95 (SKILL.md + references/); manual only (`disable-model-invocation`, run with /graphify); needs `pip install graphifyy` (skill self-installs). Uses Gemini only if GEMINI_API_KEY/GOOGLE_API_KEY set, else Claude subagents
 - `films/`: per-film working dirs (gitignored)
 
 ## Decisions
